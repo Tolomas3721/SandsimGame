@@ -16,7 +16,7 @@
                 "${workspaceFolder}/src/glad.c",
                 "-lglfw3dll",
                 "-o",
-                "${workspaceFolder}/cutable.exe"
+                "${workspaceFolder}/game.exe"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -33,7 +33,7 @@
         {
             "label": "run",
             "type": "shell",
-            "command": "start cutable.exe",
+            "command": "start game.exe",
         }
     ]
 }
