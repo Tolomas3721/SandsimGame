@@ -1,0 +1,39 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+        {
+            "type": "cppbuild",
+            "label": "build current shader",
+            "command": "g++",
+            "args": [
+                "-g",
+                "-std=c++23",
+                "-I${workspaceFolder}/include",
+                "-I${workspaceFolder}/include/glad",
+                "-I${workspaceFolder}/include/GLFW",
+                "-L${workspaceFolder}/lib",
+                "${workspaceFolder}/src/main.cpp",
+                "${workspaceFolder}/src/glad.c",
+                "-lglfw3dll",
+                "-o",
+                "${workspaceFolder}/cutable.exe"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "detail": "compiler: C:/g++.exe"
+        },
+        {
+            "label": "run",
+            "type": "shell",
+            "command": "start cutable.exe",
+        }
+    ]
+}
