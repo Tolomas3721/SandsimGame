@@ -14,8 +14,8 @@ public:
 
     Cell(CellInfo::MainType main_type, CellInfo::SubType subtype, std::uint32_t color_id){
         data = 0;
-        data |= (main_type & MASKS::MAIN_TYPE) << SHIFTS::MAIN_TYPE;
-        data |= (subtype & MASKS::SUBTYPE) << SHIFTS::SUBTYPE;
+        data |= (static_cast<std::uint32_t>(main_type) & MASKS::MAIN_TYPE) << SHIFTS::MAIN_TYPE;
+        data |= (static_cast<std::uint32_t>(subtype) & MASKS::SUBTYPE) << SHIFTS::SUBTYPE;
         data |= (color_id & MASKS::COLOR) << SHIFTS::COLOR;
     }
 

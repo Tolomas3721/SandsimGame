@@ -43,6 +43,7 @@ private:
 
 namespace CellInfo {
 
+    // returns an array sorted by ascending type_id of all the cell types, or empty in case of errors
     std::vector<CellType> load_cell_types(std::string path){
         if(!path.ends_with(".csv")){
             // LOG
@@ -68,7 +69,6 @@ namespace CellInfo {
         }
 
         // parse the csv file
-        std::vector<std::string> row(headers.size());
         std::vector<CellType> cell_types;
 
         while(std::getline(file, line)){
@@ -96,7 +96,7 @@ namespace CellInfo {
             if(it != mappings.end()) cell.name = it->second;
 
             it = mappings.find("type");
-            if(it != mappings.end()) cell.type = std::atoi(it->second.c_str());
+            if(it != mappings.end()) cell.type = std::stoul(it->second.c_str());
 
             cell_types.push_back(cell);
         }
@@ -117,7 +117,19 @@ namespace CellInfo {
         return cell_types;
     }
 
-    enum MainType : std::uint32_t {
+    std::unordered_map<std::string, unsigned int> make_cell_id_lookup(std::vector<CellType> cell_types){
+        std::unordered_map<std::string, unsigned int> mappings(cell_types.size());
+
+        for(auto& cell : cell_types){
+            mappings.insert({cell.name, cell.type});
+        }
+
+        return mappings;
+    }
+
+
+
+    enum class MainType : std::uint32_t {
         GAS = 0,
         LIQUID = 1,
         POWDER = 2,
@@ -126,7 +138,7 @@ namespace CellInfo {
 
     // here for some subtypes, but most are defined at runtime
     // these go per main type, so multiple can have same value as long as they are not the same main type
-    enum SubType {
+    enum class SubType {
         AIR = 0,
         WATER = 0,
         SAND = 0,
