@@ -47,9 +47,7 @@ public:
         return data & mask;
     }
 
-private:
-    // this must be 32 bits to comply with the shaders
-    std::uint32_t data;
+
 
     // these are hard-coded, i technically could make them auto generate, but it would be unreadable
     enum MASKS : std::uint32_t {
@@ -83,4 +81,8 @@ private:
         SUBTYPE = 2,
         COLOR = 12
     };
+    
+private:
+    // this must be 32 bits to comply with the shaders
+    std::uint32_t data;
 };
