@@ -16,16 +16,22 @@
 class SimulationShader
 {
 public:
+    // will not compile anything until compile() is called
+    SimulationShader(){ hashed_value = 0; program = 0; };
+    // will compile the shader automatically
     SimulationShader(const std::vector<CellType> &cell_types, const std::string& dir);
-    void compile(const std::string& dir);
+    void compile(const std::vector<CellType> &cell_types, const std::string& dir);
 
     // give only the directory
     // the name will be the hash
-    void save_shader(const std::string& dir);
+    void save_shader(const std::string& filepath);
 
 private:
     std::uint64_t hashed_value;
+    GLuint program;
 
+    // this is pretty useless
+    // actually, use it for detecting collisions
     bool is_already_compiled(const std::string& dir);
     GLuint get_from_previously_compiled(const std::string& filename);
     std::uint64_t hash(const std::vector<CellType>& cell_types);

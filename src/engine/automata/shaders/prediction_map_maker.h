@@ -9,7 +9,7 @@ class PredictionMapMaker {
 public:
     // number of main types to the fourth different states possible
     // maybe i should use a file to save/load the rules... seems hard (O.O)
-    std::array<std::uint32_t, 4 * 4 * 4 * 4> generate();
+    static std::array<std::uint32_t, 4 * 4 * 4 * 4> generate();
 
 private:
     enum POS_ID : std::uint32_t {

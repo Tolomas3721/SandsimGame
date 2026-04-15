@@ -4,33 +4,93 @@
 #include <filesystem>
 #include <fstream>
 
+#include "prediction_map_maker.h"
+
+
+
 SimulationShader::SimulationShader(const std::vector<CellType> &cell_types, const std::string& dir){
     hashed_value = hash(cell_types);
+    compile(cell_types, dir);
 }
 
-void SimulationShader::compile(const std::string& dir){    
-    char hash_name[8];
+void SimulationShader::compile(const std::vector<CellType> &cell_types, const std::string& dir){    
+    if(hashed_value == 0){
+        hashed_value = hash(cell_types);
+    }
 
-    std::memcpy(&hash_name, &hashed_value, 8);
-    GLuint program = get_from_previously_compiled(dir + '/' + hash_name);
+    // cant compile twice
+    if(program != 0){
+        return;
+    }
+
+    std::filesystem::path filepath(dir);
+    filepath.append(std::to_string(hashed_value));
+
+    program = get_from_previously_compiled(filepath.string());
     
     if(program == 0){
         program = glCreateProgram();
+        GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
+        std::string code = "";
+
+        code += make_constants();
+        code += make_shifts_and_masks();
+        code += make_prediction_map();
+        code += make_cell_types_array(cell_types);
+        code += make_getters();
+
+        const char* c_str_code = code.data();
+
+        glShaderSource(shader, 1, &c_str_code, nullptr);
+        glCompileShader(shader);
+
+        GLint success;
+        glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+
+        if(!success){
+            return;
+            // TODO: LOG("bitchass error")
+            //char log[1024];
+            //glGetShaderInfoLog(shader, 1024, nullptr, log);
+            //std::cerr << "Compute shader error:\n" << log << std::endl;
+        }
+
+        glad_glAttachShader(program, shader);
+        glLinkProgram(program);
+        glDeleteShader(shader);
+
+        save_shader(filepath.string());
     }
 }
 
 // give only the directory
 // the name will be the hash
-void SimulationShader::save_shader(const std::string& dir){
+void SimulationShader::save_shader(const std::string& filepath){
+    GLint binaryLength = 0;
+    glGetProgramiv(program, GL_PROGRAM_BINARY_LENGTH, &binaryLength);
+
+    if(binaryLength <= 0){
+        return;
+    }
+
+    std::vector<char> binary(binaryLength);
+    GLenum format;
     
+    glGetProgramBinary(program, binaryLength, NULL, &format, binary.data());
+
+    std::ofstream file(filepath, std::ios::out | std::ios::binary);
+    // doesnt really matter if its not saved, it will just be recompiled next time
+    if(file.is_open()){
+        file.write(reinterpret_cast<const char*>(&format), sizeof(GLenum));
+        file.write(binary.data(), binaryLength);
+        file.close();
+    }
 }
 
 bool SimulationShader::is_already_compiled(const std::string& dir){
     for(const auto& file : std::filesystem::directory_iterator(dir)){
         std::string name = file.path().filename().string();
-        std::uint64_t name_hash = 0;
-
-        std::memcpy(&name_hash, name.data(), 8);
+        std::uint64_t name_hash = std::stoull(name);
 
         if(name_hash == hashed_value) return true;
     }
@@ -163,7 +223,17 @@ std::string SimulationShader::make_cell_types_array(const std::vector<CellType>&
 }
 
 std::string SimulationShader::make_prediction_map(){
-    
+    auto map = PredictionMapMaker::generate();
+
+    std::string res = "const uint[] TYPE_MAP_PREDICTION = uint[](";
+    for(const std::uint32_t moves : map){
+        res += std::to_string(moves) + ',';
+    }
+    // remove the last comma
+    res.pop_back();
+    res += ");";
+
+    return res;
 }
 
 std::string SimulationShader::make_perfect_mixing_hashmap(){
