@@ -129,7 +129,7 @@ namespace CellInfo {
 
 
 
-    enum class MainType : std::uint32_t {
+    enum MainType : std::uint32_t {
         GAS = 0,
         LIQUID = 1,
         POWDER = 2,
@@ -138,7 +138,7 @@ namespace CellInfo {
 
     // here for some subtypes, but most are defined at runtime
     // these go per main type, so multiple can have same value as long as they are not the same main type
-    enum class SubType {
+    enum SubType {
         AIR = 0,
         WATER = 0,
         SAND = 0,
