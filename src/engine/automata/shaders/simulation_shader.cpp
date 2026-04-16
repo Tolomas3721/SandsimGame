@@ -41,6 +41,7 @@ void SimulationShader::compile(const std::vector<CellType> &cell_types, const st
         code += make_prediction_map();
         code += make_cell_types_array(cell_types);
         code += make_getters();
+        code += make_main_code();
 
         const char* c_str_code = code.data();
 
