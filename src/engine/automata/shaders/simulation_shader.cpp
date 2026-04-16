@@ -33,6 +33,9 @@ void SimulationShader::compile(const std::vector<CellType> &cell_types, const st
         GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
         std::string code = "";
 
+        code += "#version 430 core\n";
+        code += "layout(local_size_x = 256) in;";
+        code += make_uniforms_and_buffers();
         code += make_constants();
         code += make_shifts_and_masks();
         code += make_prediction_map();
@@ -59,7 +62,13 @@ void SimulationShader::compile(const std::vector<CellType> &cell_types, const st
         glLinkProgram(program);
         glDeleteShader(shader);
 
-        save_shader(filepath.string());
+        save_shader(filepath.string() + ".bin");
+        // also save the source code (for debugging)
+        std::ofstream file(filepath.string() + "_code.comp");
+        if(file.is_open()){
+            file.write(code.c_str(), code.size());
+            file.close();
+        }
     }
 }
 
@@ -149,6 +158,19 @@ std::uint64_t SimulationShader::hash(const std::vector<CellType>& cell_types){
     return hashed;
 }
 
+std::string SimulationShader::make_uniforms_and_buffers(){
+    return 
+    // uniforms
+    "layout(location = 0) uniform ivec2 CHUNK_ORIGIN;"
+    "layout(location = 1) uniform ivec2 CURRENT_STEP_OFFSET;"
+    "layout(location = 2) uniform int RAND_VALUE;"
+
+    "layout(std430, binding = 0) buffer cells_buf { uint cells[]; };"
+    "layout(std430, binding = 1) readonly buffer updated_chunks { uint active_subchunks[]; };"
+    "layout(std430, binding = 2) writeonly buffer updated_chunks { bool subchunks[]; };"
+    ;
+}
+
 // these should get their params from public stuff
 // or from a config.ini file
 std::string SimulationShader::make_constants(){
@@ -180,17 +202,38 @@ std::string SimulationShader::make_shifts_and_masks(){
 }
 
 std::string SimulationShader::make_getters(){
+    constexpr int x_bits = std::bit_width(Chunk::CHUNK_SIZE_X) - 1;
+    constexpr int y_bits = x_bits + std::bit_width(Chunk::CHUNK_SIZE_Y) - 1;
+    constexpr int chunk_x_bits = y_bits + std::bit_width(SimulationMap::MAP_SIZE_X) - 1;
+    // unused
+    //constexpr int chunk_y_bits = chunk_x_bits + std::bit_width(SimulationMap::MAP_SIZE_Y) - 1;
     return 
+    // some necessary constants
+    "const uint x_bits = " + std::to_string(x_bits) + ";"
+    "const uint y_bits = " + std::to_string(y_bits) + ";"
+    "const uint chunk_x_bits = " + std::to_string(y_bits) + ";"
     // cell data
     "uint get_main_type(uint cell){return (cell >> MAIN_TYPE_SHIFT) & MAIN_TYPE_MASK;}"
     "uint get_subtype(uint cell){return (cell >> SUBTYPE_SHIFT) & SUBTYPE_MASK;}"
     "uint get_color_id(uint cell){return (cell >> COLOR_SHIFT) & COLOR_MASK;}"
-    "uint get_full_type(uint cell){return cell & ((MASKS::MAIN_TYPE << SHIFTS::MAIN_TYPE) | (MASKS::SUBTYPE << SHIFTS::SUBTYPE));}"
-    "uint get_full_color_id(uint cell){return cell & ((MASKS::COLOR << SHIFTS::COLOR) | (MASKS::SUBTYPE << SHIFTS::SUBTYPE) | (MASKS::MAIN_TYPE << SHIFTS::MAIN_TYPE));}"
+    "uint get_full_type(uint cell){return cell & ((MAIN_TYPE_MASK << MAIN_TYPE_SHIFT) | (SUBTYPE_MASK << SUBTYPE_SHIFT));}"
+    "uint get_full_color_id(uint cell){return cell & ((COLOR_MASK << COLOR_SHIFT) | (SUBTYPE_MASK << SUBTYPE_SHIFT) | (MAIN_TYPE_MASK << MAIN_TYPE_SHIFT));}"
     // celltype data
     "float get_density(uint full_type){return cell_types[full_type].density;}"
     "float get_flammability(uint full_type){return cell_types[full_type].flammability;}"
     "float get_conductivity(uint full_type){return cell_types[full_type].conductivity;}"
+    // cell position
+    "uint get_cell(uint pos){ return cells[pos];}"
+    "uint get_pos(uint x, uint y, uint chunk_x, uint chunk_y){ return (x << 0) + (y << x_bits) + (chunk_x << y_bits) + (chunk_y << chunk_x_bits);}"
+    // subchunks
+    "void set_subchunk_active(uint pos){"
+        "uint subpos_x = pos & (CHUNK_SIZE_X - 1);"
+        "subpos_x /= SUBCHUNK_SIZE_X;"
+        "uint subpos_y = (pos >> x_bits) & (CHUNK_SIZE_Y - 1);"
+        "subpos_y /= SUBCHUNK_SIZE_Y;"
+        "pos >>= chunk_x_bits;"
+        "subchunks[subpos_x + (subpos_y * SUBCHUNK_SIZE_X) + pos * SUBCHUNK_SIZE_Y * SUBCHUNK_SIZE_X] = true;"
+    "}"
     ;
 }
 
@@ -234,6 +277,58 @@ std::string SimulationShader::make_prediction_map(){
     res += ");";
 
     return res;
+}
+
+std::string SimulationShader::make_main_code(){
+    return 
+    R"(
+    uint rand() {
+        uint state = gl_GlobalInvocationID.x * 1973u * RAND_VALUE;
+        state ^= (state << 13);
+        state ^= (state >> 17);
+        state ^= (state << 5);
+        return state & 3;
+    }
+
+    void main() {
+        uint subchunk_id = gl_GlobalInvocationID.x / TILES_PER_SUBCHUNK;
+        uint subchunk = active_subchunks[subchunk_id];
+        uint chunk_x = subchunk / (CHUNK_SIZE_X / SUBCHUNK_SIZE_X);
+        uint chunk_y = subchunk / (CHUNK_SIZE_Y / SUBCHUNK_SIZE_Y);
+        uint tile = gl_GlobalInvocationID.x % TILES_PER_SUBCHUNK;
+        uint tile_x = 2 * (tile % SUBCHUNK_SIZE_X);
+        uint tile_y = 2 * (tile / SUBCHUNK_SIZE_X);
+
+        uint pos = tile_x | (tile_y << x_bits) | (chunk_x << y_bits) | (chunk_y << chunk_x_bits);
+
+        uint cells[4] = uint[](
+            cells[pos + (1 << x_bits)],
+            cells[pos + (1 << x_bits) + 1],
+            cells[pos],
+            cells[pos + 1]
+        );
+
+        uint index = (get_main_type(cells[0]) << 6) 
+                | (get_main_type(cells[1]) << 4)
+                | (get_main_type(cells[2]) << 2)
+                | (get_main_type(cells[3]));
+
+        uint moves = TYPE_MAP_PREDICTION[index];
+        uint random_shift = 8 * rand();
+        moves = (moves >> random_shift) & 0xFF;
+
+        const uint NO_MOVE = (0 << 6) | (1 << 4) | (2 << 2) | 3;
+
+        if(moves == NO_MOVE) return;
+
+        for(int i = 0; i < 4; i++){
+            uint where = (moves >> (2 * (3-i))) & 3;
+            if(where != i){
+                write_cell(cells[i], pos + OFFSETS[smol_offsets[where]]);
+                set_subchunk_active(pos + OFFSETS[smol_offsets[where]]);
+            }
+        }
+    })";
 }
 
 std::string SimulationShader::make_perfect_mixing_hashmap(){

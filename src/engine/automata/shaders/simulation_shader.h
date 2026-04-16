@@ -36,6 +36,7 @@ private:
     GLuint get_from_previously_compiled(const std::string& filename);
     std::uint64_t hash(const std::vector<CellType>& cell_types);
 
+    constexpr std::string make_uniforms_and_buffers();
     // these should get their params from public stuff
     // or from a config.ini file
     constexpr std::string make_constants();
@@ -45,5 +46,6 @@ private:
     constexpr std::string make_cell_types_array(const std::vector<CellType>& cell_types);
 
     constexpr std::string make_prediction_map();
+    constexpr std::string make_main_code();
     constexpr std::string make_perfect_mixing_hashmap();
 };

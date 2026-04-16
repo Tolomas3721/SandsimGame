@@ -27,9 +27,9 @@ public:
     }
 
     static constexpr size_t MAP_SIZE_X = 8;
-    static_assert(std::has_single_bit(MAP_SIZE_X), "MAP_SIZE_X in SimulationMap class is not power of 2");
+    static_assert(std::has_single_bit(MAP_SIZE_X) && MAP_SIZE_X > 0, "MAP_SIZE_X in SimulationMap class is not power of 2");
     static constexpr size_t MAP_SIZE_Y = 8;
-    static_assert(std::has_single_bit(MAP_SIZE_Y), "MAP_SIZE_Y in SimulationMap class is not power of 2");
+    static_assert(std::has_single_bit(MAP_SIZE_Y) && MAP_SIZE_Y > 0, "MAP_SIZE_Y in SimulationMap class is not power of 2");
 
 private:
     std::array<std::array<Chunk, MAP_SIZE_X>, MAP_SIZE_Y> chunks;
