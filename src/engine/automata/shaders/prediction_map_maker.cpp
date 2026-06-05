@@ -55,21 +55,6 @@ CellInfo::MainType PredictionMapMaker::TileState::get_from_id(POS_ID pos){
     //return reinterpret_cast<CellInfo::MainType*>(this)[pos];
 }
 
-PredictionMapMaker::TileState::TileState(CellInfo::MainType top_left, CellInfo::MainType top_right, CellInfo::MainType bottom_left, CellInfo::MainType bottom_right){
-    this->top_left = top_left;
-    this->top_right = top_right;
-    this->bottom_left = bottom_left;
-    this->bottom_right = bottom_right;
-}
-
-PredictionMapMaker::TileState::TileState(std::uint32_t state){
-    auto a = unpack(state);
-    top_left = a[TOP_LEFT];
-    top_right = a[TOP_RIGHT];
-    bottom_left = a[BOTTOM_LEFT];
-    bottom_right = a[BOTTOM_RIGHT];
-}
-
 void PredictionMapMaker::TileState::operator=(std::array<CellInfo::MainType, 4> values){
     top_left = values[TOP_LEFT];
     top_right = values[TOP_RIGHT];
@@ -126,6 +111,8 @@ void PredictionMapMaker::MoveGroup::fill(POS_ID top_left, POS_ID top_right, POS_
 }
 
 void PredictionMapMaker::MoveGroup::fill_portion(POS_ID top_left, POS_ID top_right, POS_ID bottom_left, POS_ID bottom_right, std::uint32_t portion){
+    if(portion > 4) throw std::out_of_range("portion too friggin high!!!");
+    
     for(std::uint32_t i = 0; i < portion; i++){
         std::uint32_t move = (top_left << 6) | (top_right << 4) | (bottom_left << 2) | bottom_right;
         std::uint32_t mask = 0xFF << (8 * i);
@@ -224,6 +211,7 @@ void PredictionMapMaker::MoveGroup::generate(TileState state){
         fill_portion(TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, 1);
         if(state.is_left(CellInfo::MainType::GAS) && state.is_right(CellInfo::MainType::LIQUID)){
             // make it glide a certain disclosed percentage of the time
+            // this has little impact
             fill_portion(TOP_RIGHT, TOP_LEFT, BOTTOM_RIGHT, BOTTOM_LEFT, 4);
             fill_portion(TOP_LEFT, TOP_RIGHT, BOTTOM_RIGHT, BOTTOM_LEFT, 1);
         }
@@ -231,7 +219,7 @@ void PredictionMapMaker::MoveGroup::generate(TileState state){
         return;
     }
     
-    if(state.bottom_left == state.bottom_right && 
+    if(//state.bottom_left == state.bottom_right && 
     ((state.top_left == CellInfo::MainType::LIQUID && state.top_right == CellInfo::MainType::GAS) || 
     (state.top_right == CellInfo::MainType::LIQUID && state.top_left == CellInfo::MainType::GAS))){
         // top glide
@@ -242,12 +230,21 @@ void PredictionMapMaker::MoveGroup::generate(TileState state){
         return;
     }
 
-    if(state.is_top(CellInfo::MainType::GAS) && 
+    if(!state.is_top(CellInfo::MainType::LIQUID) && 
     (state.bottom_left == CellInfo::MainType::LIQUID || state.bottom_right == CellInfo::MainType::LIQUID)){
         // bottom glide
         fill(TOP_LEFT, TOP_RIGHT, BOTTOM_RIGHT, BOTTOM_LEFT);
         // fill 1/4 with no_move
         fill_portion(TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, 1);
+        return;
+    }
+
+    if(state.is_bottom(CellInfo::MainType::LIQUID) && state.is_top(CellInfo::MainType::GAS)){
+        // no move
+        fill(TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT);
+        // fill 1/4 with up move
+        // actually, this is useless without more stuff lol
+        fill_portion(TOP_LEFT, BOTTOM_LEFT, TOP_RIGHT, BOTTOM_RIGHT, 0);
         return;
     }
     

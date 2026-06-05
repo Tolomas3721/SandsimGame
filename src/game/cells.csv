@@ -1,0 +1,5 @@
+name,type,density,flammability,conductivity
+air,0,0.0,0.0,0.0
+sand,1,2.0,0.0,0.0
+water,2,1.0,0.0,0.0
+rock,3,5.0,0.0,0.2

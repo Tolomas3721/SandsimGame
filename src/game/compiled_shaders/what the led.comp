@@ -1,0 +1,134 @@
+#version 430 core
+layout(local_size_x = 256) in;const uint CHUNK_SIZE_X = 256;
+const uint CHUNK_SIZE_Y = 256;
+const uint SUBCHUNK_SIZE_X = 32;
+const uint SUBCHUNK_SIZE_Y = 32;
+const uint TILES_PER_SUBCHUNK = 256;
+const uint NUMBER_CHUNKS_X = 8;
+const uint NUMBER_SUBCHUNKS_X = CHUNK_SIZE_X * NUMBER_CHUNKS_X / SUBCHUNK_SIZE_X;const uint GAS = 0;
+const uint LIQUID = 1;
+const uint POWDER = 2;
+const uint SOLID = 3;
+layout(location = 0) uniform ivec2 CURRENT_STEP_OFFSET;
+layout(location = 1) uniform int RAND_VALUE;
+layout(std430, binding = 0) buffer cells_buf { uint cells[]; };
+layout(std430, binding = 1) readonly buffer active_chunks { uint active_subchunks[]; };
+layout(std430, binding = 2) writeonly buffer updated_chunks { uint subchunks[]; };
+const uint MAIN_TYPE_MASK = 3;
+const uint SUBTYPE_MASK = 1023;
+const uint COLOR_MASK = 15;
+const uint MAIN_TYPE_SHIFT = 0;
+const uint SUBTYPE_SHIFT = 2;
+const uint COLOR_SHIFT = 12;
+const uint[] TYPE_MAP_PREDICTION = uint[](
+454761243,505290267,454761243,454761243,505290267,505290267,505290267,505290267,454761243,505290267,454761243,454761243,454761243,505290267,454761243,454761243,960046887,1313754654,656877339,656877339,960051513,1263225627,454761243,454761243,960051513,454761243,1263225627,454761243,960051513,454761243,454761243,1263225627,960046887,960046887,656877339,656877339,960046887,960046887,656877339,656877339,960051513,960051513,454761243,454761243,960051513,960051513,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,2475940056,2475922323,2475922323,2475922323,1313754654,1263225627,454761243,454761243,3638089755,454761243,1263225627,454761243,3638089755,454761243,454761243,1263225627,2981204793,2475922323,2475922323,2475922323,960051513,454761243,454761243,454761243,960051513,454761243,454761243,454761243,960051513,454761243,454761243,454761243,2981204793,2981204793,656877339,656877339,960046887,960046887,656877339,656877339,960051513,960051513,454761243,454761243,960051513,960051513,454761243,454761243,2475940056,2475922323,2475922323,2475922323,3638089755,454761243,454761243,454761243,3638089755,454761243,454761243,454761243,3638089755,454761243,454761243,454761243,2475940056,2475940056,2475922323,2475922323,2475940056,2475940056,2475922323,2475922323,3638089755,3638089755,454761243,454761243,3638089755,3638089755,454761243,454761243,2981204793,2475940056,2475922323,2475922323,2981204793,2475940056,2475922323,2475922323,3638089755,3638089755,454761243,454761243,3638089755,3638089755,454761243,454761243,2981204793,2981204793,2475922323,2475922323,2981204793,2981204793,2475922323,2475922323,960051513,960051513,454761243,454761243,960051513,960051513,454761243,454761243,2475940056,2475940056,2475922323,2475922323,2475940056,2475940056,2475922323,2475922323,3638089755,3638089755,454761243,454761243,3638089755,3638089755,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,960046887,656877339,656877339,656877339,960051513,454761243,454761243,454761243,960051513,454761243,454761243,454761243,960051513,454761243,454761243,454761243,960046887,960046887,656877339,656877339,960046887,960046887,656877339,656877339,960051513,960051513,454761243,454761243,960051513,960051513,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243,454761243);
+struct CellType {
+float density;
+float flammability;
+float conductivity;
+};
+const CellType[] cell_types = CellType[](
+CellType(0.000000,0.000000,0.000000),CellType(2.000000,0.000000,0.000000),CellType(1.000000,0.000000,0.000000),CellType(5.000000,0.000000,0.200000));
+const uint y_bits = 11;
+const uint chunk_x_bits = 8;
+const uint chunk_y_bits = 19;
+uint get_main_type(uint cell){return (cell >> MAIN_TYPE_SHIFT) & MAIN_TYPE_MASK;}
+uint get_subtype(uint cell){return (cell >> SUBTYPE_SHIFT) & SUBTYPE_MASK;}
+uint get_color_id(uint cell){return (cell >> COLOR_SHIFT) & COLOR_MASK;}
+uint get_full_type(uint cell){return cell & ((MAIN_TYPE_MASK << MAIN_TYPE_SHIFT) | (SUBTYPE_MASK << SUBTYPE_SHIFT));}
+uint get_full_color_id(uint cell){return cell & ((COLOR_MASK << COLOR_SHIFT) | (SUBTYPE_MASK << SUBTYPE_SHIFT) | (MAIN_TYPE_MASK << MAIN_TYPE_SHIFT));}
+float get_density(uint full_type){return cell_types[full_type].density;}
+float get_flammability(uint full_type){return cell_types[full_type].flammability;}
+float get_conductivity(uint full_type){return cell_types[full_type].conductivity;}
+uint get_cell(uint pos){ return cells[pos];}
+void write_cell(uint pos, uint value){ cells[pos] = value;}
+uint get_pos(uint x, uint y, uint chunk_x, uint chunk_y){ return (x << 0) + (y << y_bits) + (chunk_x << chunk_x_bits) + (chunk_y << chunk_y_bits);}
+void set_subchunk_active(uint pos){
+uint cell_x = pos % (1 << y_bits);
+uint cell_y = pos >> y_bits;
+uint subchunk_x = cell_x / SUBCHUNK_SIZE_X;
+uint subchunk_y = cell_y / SUBCHUNK_SIZE_Y;
+uint subchunk_id = subchunk_y * NUMBER_SUBCHUNKS_X + subchunk_x;
+subchunks[subchunk_id] = 1;
+}
+
+    uint rand() {
+        uint state = gl_GlobalInvocationID.x * 1973u * RAND_VALUE;
+        state ^= (state << 13);
+        state ^= (state >> 17);
+        state ^= (state << 5);
+        return state & 3;
+    }
+
+    void main() {
+        const uint TILES_PER_SUBCHUNK_X = SUBCHUNK_SIZE_X / 2;
+        uint subchunk_id = active_subchunks[gl_WorkGroupID.x];
+        uint subchunk_y = subchunk_id / NUMBER_SUBCHUNKS_X;
+        uint subchunk_x = subchunk_id % NUMBER_SUBCHUNKS_X;
+
+        uint global_y = subchunk_y * SUBCHUNK_SIZE_Y + 2 * ((gl_LocalInvocationID.x / TILES_PER_SUBCHUNK_X) % TILES_PER_SUBCHUNK_X) + CURRENT_STEP_OFFSET.y;
+        uint global_x = subchunk_x * SUBCHUNK_SIZE_X + 2 * (gl_LocalInvocationID.x % TILES_PER_SUBCHUNK_X) + CURRENT_STEP_OFFSET.x;
+
+        uint pos = global_x | (global_y << y_bits);
+        
+        uint tile[4] = uint[](
+            get_cell(pos + (1 << (y_bits))),
+            get_cell(pos + (1 << (y_bits)) + 1),
+            get_cell(pos),
+            get_cell(pos + 1)
+        );
+
+        uint index = (get_main_type(tile[0]) << 6) | (get_subtype(tile[0]) << 7)
+                | (get_main_type(tile[1]) << 4) | ((1 - get_subtype(tile[1])) << 5)
+                | (get_main_type(tile[2]) << 2) | (get_subtype(tile[2]) << 3)
+                | (get_main_type(tile[3])) | ((1 - get_subtype(tile[3])) << 1);
+
+        uint moves = TYPE_MAP_PREDICTION[index];
+        const uint NO_MOVE = (0 << 6) | (1 << 4) | (2 << 2) | 3;
+        if(moves == (NO_MOVE | (NO_MOVE << 8) | (NO_MOVE << 16) | (NO_MOVE << 24))){
+            //return;
+        }
+        uint random_shift = 8 * rand();
+        moves = (moves >> random_shift) & 0xFF;
+
+        const uint offsets[] = uint[]((1 << y_bits), (1 << y_bits) + 1, 0, 1);
+
+        if(moves == NO_MOVE){
+            //return;
+        }
+
+
+        uint where = (moves >> 6) & 3;
+        //if(where != 0){
+        if(where != 0) tile[0] |= 1 << 14;
+        else tile[0] = tile[0] & 0x3FFF;
+            write_cell(pos + offsets[where], tile[0]);
+            set_subchunk_active(pos + offsets[where]);
+        //}
+
+        where = (moves >> 4) & 3;
+        //if(where != 1){
+        if(where != 1) tile[1] |= 1 << 14;
+        else tile[1] = tile[1] & 0x3FFF;
+            write_cell(pos + offsets[where], tile[1]);
+            set_subchunk_active(pos + offsets[where]);
+        //}
+
+        where = (moves >> 2) & 3;
+        //if(where != 2){
+        if(where != 2) tile[2] |= 1 << 14;
+        else tile[2] = tile[2] & 0x3FFF;
+            write_cell(pos + offsets[where], tile[2]);
+            set_subchunk_active(pos + offsets[where]);
+        //}
+
+        where = (moves >> 0) & 3;
+        //if(where != 3){
+        if(where != 3) tile[3] |= 1 << 14;
+        else tile[3] = tile[3] & 0x3FFF;
+            write_cell(pos + offsets[where], tile[3]);
+            set_subchunk_active(pos + offsets[where]);
+        //}
+            
+        //set_subchunk_active(pos);
+    }

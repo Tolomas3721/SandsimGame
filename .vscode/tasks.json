@@ -2,38 +2,36 @@
 	"version": "2.0.0",
 	"tasks": [
         {
-            "type": "cppbuild",
-            "label": "build current shader",
-            "command": "g++",
-            "args": [
-                "-g",
-                "-std=c++23",
-                "-I${workspaceFolder}/include",
-                "-I${workspaceFolder}/include/glad",
-                "-I${workspaceFolder}/include/GLFW",
-                "-L${workspaceFolder}/lib",
-                "${workspaceFolder}/src/main.cpp",
-                "${workspaceFolder}/src/glad.c",
-                "-lglfw3dll",
-                "-o",
-                "${workspaceFolder}/game.exe"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "problemMatcher": [
-                "$gcc"
-            ],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "detail": "compiler: C:/g++.exe"
-        },
-        {
             "label": "run",
             "type": "shell",
             "command": "start game.exe",
+        },
+        {
+        "label": "cmake configure",
+        "type": "shell",
+        "command": "cmake",
+        "args": [
+            "-S",
+            ".",
+            "-B",
+            "build",
+            "-G",
+            "MinGW Makefiles"
+        ],
+        "group": "build",
+        "problemMatcher": []
+        },
+        {
+        "label": "cmake build",
+        "type": "shell",
+        "command": "cmake",
+        "args": [
+            "--build",
+            "build"
+        ],
+        "group": "build",
+        "dependsOn": "cmake configure",
+        "problemMatcher": []
         }
     ]
 }

@@ -1,0 +1,149 @@
+#version 460 core
+layout(local_size_x = 128) in;const uint CHUNK_SIZE_X = 256;
+const uint CHUNK_SIZE_Y = 256;
+const uint SUBCHUNK_SIZE_X = 64;
+const uint SUBCHUNK_SIZE_Y = 8;
+const uint TILES_PER_SUBCHUNK = 128;
+const uint NUMBER_CHUNKS_X = 8;
+const uint NUMBER_SUBCHUNKS_X = CHUNK_SIZE_X * NUMBER_CHUNKS_X / SUBCHUNK_SIZE_X;const uint GAS = 0;
+const uint LIQUID = 1;
+const uint POWDER = 2;
+const uint SOLID = 3;
+layout(location = 0) uniform ivec2 CURRENT_STEP_OFFSET;
+layout(location = 1) uniform uint RAND_VALUE;
+struct Chunk {
+   uint cells[CHUNK_SIZE_X * CHUNK_SIZE_Y];
+};
+layout(std430, binding = 0) buffer cells_buf { Chunk cells[]; };
+layout(std430, binding = 1) readonly buffer active_chunks { uint active_subchunks[]; };
+layout(std430, binding = 2) writeonly buffer updated_chunks { uint subchunks[]; };
+const uint MAIN_TYPE_MASK = 3;
+const uint SUBTYPE_MASK = 1023;
+const uint COLOR_MASK = 15;
+const uint MAIN_TYPE_SHIFT = 0;
+const uint SUBTYPE_SHIFT = 2;
+const uint COLOR_SHIFT = 12;
+const uint[] TYPE_MAP_PREDICTION = uint[](
+454761243,505290267,454761243,454761243,505290267,505290267,505290267,505290267,454761243,505290267,454761243,454761243,454761243,505290267,454761243,454761243,960046887,1313754654,656877339,656877339,960051513,1263225627,1263225627,1263225627,960051513,1263225627,1263225627,1263225627,960051513,1263225627,1263225627,1263225627,960046887,960046887,656877339,656877339,960046887,960046887,656877339,656877339,960051513,960051513,454761243,454761243,960051513,960051513,454761243,454761243,454761243,505290267,454761243,454761243,505290267,505290267,505290267,505290267,454761243,505290267,454761243,454761243,454761243,505290267,454761243,454761243,2475940056,2475922323,2475922323,2475922323,1313754654,1263225627,1263225627,1263225627,3638089755,1263225627,1263225627,1263225627,3638089755,1263225627,1263225627,1263225627,2981204793,2475922323,2475922323,2475922323,960051513,454761243,454761243,454761243,960051513,454761243,454761243,454761243,960051513,454761243,454761243,454761243,2981204793,2981204793,656877339,656877339,960046887,960046887,656877339,656877339,960051513,960051513,454761243,454761243,960051513,960051513,454761243,454761243,2475940056,2475922323,2475922323,2475922323,3638089755,505290267,505290267,505290267,3638089755,505290267,454761243,454761243,3638089755,505290267,454761243,454761243,2475940056,2475940056,2475922323,2475922323,2475940056,2475940056,2475922323,2475922323,3638089755,3638089755,454761243,454761243,3638089755,3638089755,454761243,454761243,2981204793,2475940056,2475922323,2475922323,2981204793,2475940056,2475922323,2475922323,3638089755,3638089755,454761243,454761243,3638089755,3638089755,454761243,454761243,2981204793,2981204793,2475922323,2475922323,2981204793,2981204793,2475922323,2475922323,960051513,960051513,454761243,454761243,960051513,960051513,454761243,454761243,2475940056,2475940056,2475922323,2475922323,2475940056,2475940056,2475922323,2475922323,3638089755,3638089755,454761243,454761243,3638089755,3638089755,454761243,454761243,454761243,505290267,454761243,454761243,505290267,505290267,505290267,505290267,454761243,505290267,454761243,454761243,454761243,505290267,454761243,454761243,960046887,656877339,656877339,656877339,960051513,505290267,505290267,505290267,960051513,505290267,454761243,454761243,960051513,505290267,454761243,454761243,960046887,960046887,656877339,656877339,960046887,960046887,656877339,656877339,960051513,960051513,454761243,454761243,960051513,960051513,454761243,454761243,454761243,505290267,454761243,454761243,505290267,505290267,505290267,505290267,454761243,505290267,454761243,454761243,454761243,505290267,454761243,454761243);
+struct CellType {
+float density;
+float flammability;
+float conductivity;
+};
+const CellType[] cell_types = CellType[](
+CellType(0.000000,0.000000,0.000000),CellType(2.000000,0.000000,0.000000),CellType(1.000000,0.000000,0.000000),CellType(5.000000,0.000000,0.200000));
+const uint CHUNK_COUNT_X = 8;
+const uint CHUNK_COUNT_Y = 8;
+uint get_main_type(uint cell){return (cell >> MAIN_TYPE_SHIFT) & MAIN_TYPE_MASK;}
+uint get_subtype(uint cell){return (cell >> SUBTYPE_SHIFT) & SUBTYPE_MASK;}
+uint get_color_id(uint cell){return (cell >> COLOR_SHIFT) & COLOR_MASK;}
+uint get_full_type(uint cell){return cell & ((MAIN_TYPE_MASK << MAIN_TYPE_SHIFT) | (SUBTYPE_MASK << SUBTYPE_SHIFT));}
+uint get_full_color_id(uint cell){return cell & ((COLOR_MASK << COLOR_SHIFT) | (SUBTYPE_MASK << SUBTYPE_SHIFT) | (MAIN_TYPE_MASK << MAIN_TYPE_SHIFT));}
+float get_density(uint full_type){return cell_types[full_type].density;}
+float get_flammability(uint full_type){return cell_types[full_type].flammability;}
+float get_conductivity(uint full_type){return cell_types[full_type].conductivity;}
+uint get_cell(uvec4 pos){
+ for(int i = 0; i < 8; i++) cells[0].cells[0] = cells[0].cells[0];   pos.w += pos.y / CHUNK_SIZE_Y;
+   pos.y = pos.y % CHUNK_SIZE_Y;
+   pos.z += pos.x / CHUNK_SIZE_X;
+   pos.x = pos.x % CHUNK_SIZE_X;
+   return cells[pos.w * CHUNK_COUNT_X + pos.z].cells[pos.y * CHUNK_SIZE_X + pos.x];
+}
+void write_cell(uvec4 pos, uint value){
+   pos.w += pos.y / CHUNK_SIZE_Y;
+   pos.y = pos.y % CHUNK_SIZE_Y;
+   pos.z += pos.x / CHUNK_SIZE_X;
+   pos.x = pos.x % CHUNK_SIZE_X;
+   cells[pos.w * CHUNK_COUNT_X + pos.z].cells[pos.y * CHUNK_SIZE_X + pos.x] = value;
+}
+void set_subchunk_active(uvec4 pos){
+   uint subchunk_x = pos.x / SUBCHUNK_SIZE_X + pos.z * (CHUNK_SIZE_X / SUBCHUNK_SIZE_X);
+   uint subchunk_y = pos.y / SUBCHUNK_SIZE_Y + pos.w * (CHUNK_SIZE_Y / SUBCHUNK_SIZE_Y);
+   uint subchunk_id = subchunk_y * NUMBER_SUBCHUNKS_X + subchunk_x;
+   subchunks[subchunk_id] = RAND_VALUE;
+}
+
+    uint rand() {
+        uint state = gl_GlobalInvocationID.x ^ (1973u * RAND_VALUE);
+        state ^= (state << 13);
+        state ^= (state >> 17);
+        state ^= (state << 5);
+        return state & 3;
+    }
+
+    void main() {
+        const uint TILES_PER_SUBCHUNK_X = SUBCHUNK_SIZE_X / 2;
+        uint subchunk_id = active_subchunks[gl_WorkGroupID.x];
+        uint subchunk_y = subchunk_id / NUMBER_SUBCHUNKS_X;
+        uint subchunk_x = subchunk_id % NUMBER_SUBCHUNKS_X;
+
+        uint global_y = subchunk_y * SUBCHUNK_SIZE_Y + 2 * ((gl_LocalInvocationID.x / TILES_PER_SUBCHUNK_X) % TILES_PER_SUBCHUNK_X) + CURRENT_STEP_OFFSET.y;
+        uint global_x = subchunk_x * SUBCHUNK_SIZE_X + 2 * (gl_LocalInvocationID.x % TILES_PER_SUBCHUNK_X) + CURRENT_STEP_OFFSET.x;
+
+        uvec4 pos = uvec4(
+            global_x % CHUNK_SIZE_X, 
+            global_y % CHUNK_SIZE_Y,
+            global_x / CHUNK_SIZE_X, 
+            global_y / CHUNK_SIZE_Y
+        );
+        
+        const uvec4 offsets[] = uvec4[](
+            uvec4(0, 1, 0, 0), 
+            uvec4(1, 1, 0, 0), 
+            uvec4(0, 0, 0, 0), 
+            uvec4(1, 0, 0, 0)
+        );
+        
+        uint tile[4] = uint[](
+            get_cell(pos + offsets[0]),
+            get_cell(pos + offsets[1]),
+            get_cell(pos + offsets[2]), // useless, since 0
+            get_cell(pos + offsets[3])
+        );
+
+        uint index = (get_main_type(tile[0]) << 6)
+                | (get_main_type(tile[1]) << 4)
+                | (get_main_type(tile[2]) << 2)
+                | (get_main_type(tile[3]));
+
+        uint moves = TYPE_MAP_PREDICTION[index];
+        const uint NO_MOVE = (0 << 6) | (1 << 4) | (2 << 2) | 3;
+        if(moves == (NO_MOVE | (NO_MOVE << 8) | (NO_MOVE << 16) | (NO_MOVE << 24))){
+            return;
+        }
+        uint random_shift = 8 * rand();
+        moves = (moves >> random_shift) & 0xFF;
+
+        
+
+        if(moves == NO_MOVE){
+            //return;
+        }
+
+
+        uint where = (moves >> 6) & 3;
+        //if(where != 0){
+            write_cell(pos + offsets[0], tile[where]);
+            set_subchunk_active(pos + offsets[0]);
+        //}
+
+        where = (moves >> 4) & 3;
+        //if(where != 1){
+            write_cell(pos + offsets[1], tile[where]);
+            set_subchunk_active(pos + offsets[1]);
+        //}
+
+        where = (moves >> 2) & 3;
+        //if(where != 2){
+            write_cell(pos + offsets[2], tile[where]);
+            set_subchunk_active(pos + offsets[2]);
+        //}
+
+        where = (moves >> 0) & 3;
+        //if(where != 3){
+            write_cell(pos + offsets[3], tile[where]);
+            set_subchunk_active(pos + offsets[3]);
+        //}
+            
+        //set_subchunk_active(pos);
+    }

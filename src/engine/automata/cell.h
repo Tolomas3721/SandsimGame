@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <random>
 
 #include "cell_info.h"
 
@@ -49,37 +50,41 @@ public:
 
 
 
-    // these are hard-coded, i technically could make them auto generate, but it would be unreadable
-    enum MASKS : std::uint32_t {
-        // 2 bits
-        MAIN_TYPE = 3,
-        // 1024 subtypes for 4096 total types... wont be too small, hopefully lol
-        SUBTYPE = 0x3FF,
-        // 4 bits for color, 16 colors per type
-        // 4 bytes * 4096 types * 16 colors = 256kb of palette
-        COLOR = 0xF
-        /* 
-         * 16 free bits for now, can store 
-         * 1 65536 values or 
-         * 2 256 values or 
-         * 4 16 values or 
-         * 8 4 values or
-         * 16 flags
-         * more types?
-         * heat?
-         * electricity?
-         * on fire?
-         * lifetime?
-         * velocity?wdwdasdwad
-         * light (tint, light emission, etc)
-         * stains? (color override)
-        */
+    struct MASKS {
+        // these are hard-coded, i technically could make them auto generate, but it would be unreadable
+        enum : std::uint32_t {
+            // 2 bits
+            MAIN_TYPE = 3,
+            // 1024 subtypes for 4096 total types... wont be too small, hopefully lol
+            SUBTYPE = 0x3FF,
+            // 4 bits for color, 16 colors per type
+            // 4 bytes * 4096 types * 16 colors = 256kb of palette
+            COLOR = 0xF
+            /* 
+            * 16 free bits for now, can store 
+            * 1 65536 values or 
+            * 2 256 values or 
+            * 4 16 values or 
+            * 8 4 values or
+            * 16 flags
+            * more types?
+            * heat?
+            * electricity?
+            * on fire?
+            * lifetime?
+            * velocity?wdwdasdwad
+            * light (tint, light emission, etc)
+            * stains? (color override)
+            */
+        };
     };
 
-    enum SHIFTS : std::uint32_t {
-        MAIN_TYPE = 0,
-        SUBTYPE = 2,
-        COLOR = 12
+    struct SHIFTS {
+        enum : std::uint32_t {
+            MAIN_TYPE = 0,
+            SUBTYPE = 2,
+            COLOR = 12
+        };
     };
     
 private:
