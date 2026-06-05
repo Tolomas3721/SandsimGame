@@ -56,9 +56,9 @@ target_link_libraries(game PRIVATE
 
 # static linking
 target_link_options(game PRIVATE
-    #-static
-    #-static-libgcc
-    #-static-libstdc++
+    -static
+    -static-libgcc
+    -static-libstdc++
 )
 # -------------------------
 # Output directory
