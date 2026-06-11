@@ -39,8 +39,8 @@ void SimulationShader::run(){
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, updated_subchunks);
     glBindBuffer(GL_DISPATCH_INDIRECT_BUFFER, update_counter);
     for(size_t i = 0; i < offsets.size(); i++){
-        const GLuint offset = 0;
-        glUniform2i(offset, offsets[i].first, offsets[i].second);
+        const GLuint offset_loc = 0;
+        glUniform2i(offset_loc, offsets[i].first, offsets[i].second);
         glDispatchComputeIndirect(0);
         glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);// | GL_BUFFER_UPDATE_BARRIER_BIT);
     }
@@ -224,7 +224,7 @@ void SimulationShader::compile(const std::vector<CellType> &cell_types, const st
         std::cout << "failed to compile simulation\n";
         char log[1024];
         glGetShaderInfoLog(shader, 1024, nullptr, log);
-        std::cerr << "Compacter shader error:\n" << log << std::endl;
+        std::cerr << "Simulation shader error:\n" << log << std::endl;
         return;
         // TODO: LOG("bitchass error")
         //char log[1024];
@@ -400,7 +400,7 @@ constexpr std::string SimulationShader::make_getters(){
     "float get_flammability(uint full_type){return cell_types[full_type].flammability;}\n"
     "float get_conductivity(uint full_type){return cell_types[full_type].conductivity;}\n"
     // cell position
-    "uint get_cell(uvec4 pos){\n for(int i = 0; i < 8; i++) cells[0].cells[0] = cells[0].cells[0];"
+    "uint get_cell(uvec4 pos){\n"
     "   pos.w += pos.y / CHUNK_SIZE_Y;\n"
     "   pos.y = pos.y % CHUNK_SIZE_Y;\n"
     "   pos.z += pos.x / CHUNK_SIZE_X;\n"
@@ -478,7 +478,10 @@ constexpr std::string SimulationShader::make_main_code(){
         return state & 3;
     }
 
+    shared bool is_active;
+
     void main() {
+        if(gl_LocalInvocationID.x == 0) is_active = false;
         const uint TILES_PER_SUBCHUNK_X = SUBCHUNK_SIZE_X / 2;
         uint subchunk_id = active_subchunks[gl_WorkGroupID.x];
         uint subchunk_y = subchunk_id / NUMBER_SUBCHUNKS_X;
@@ -515,44 +518,47 @@ constexpr std::string SimulationShader::make_main_code(){
 
         uint moves = TYPE_MAP_PREDICTION[index];
         const uint NO_MOVE = (0 << 6) | (1 << 4) | (2 << 2) | 3;
-        if(moves == (NO_MOVE | (NO_MOVE << 8) | (NO_MOVE << 16) | (NO_MOVE << 24))){
+        const uint TRUE_NO_MOVE = (NO_MOVE | (NO_MOVE << 8) | (NO_MOVE << 16) | (NO_MOVE << 24));
+
+        if(moves != TRUE_NO_MOVE){
+            is_active = true;
+        } else if(gl_LocalInvocationID.x != 0){
             return;
         }
+
         uint random_shift = 8 * rand();
         moves = (moves >> random_shift) & 0xFF;
 
-        
-
-        if(moves == NO_MOVE){
-            //return;
-        }
-
-
         uint where = (moves >> 6) & 3;
-        //if(where != 0){
-            write_cell(pos + offsets[0], tile[where]);
-            set_subchunk_active(pos + offsets[0]);
-        //}
+        write_cell(pos + offsets[0], tile[where]);
 
         where = (moves >> 4) & 3;
-        //if(where != 1){
-            write_cell(pos + offsets[1], tile[where]);
-            set_subchunk_active(pos + offsets[1]);
-        //}
+        write_cell(pos + offsets[1], tile[where]);
 
         where = (moves >> 2) & 3;
-        //if(where != 2){
-            write_cell(pos + offsets[2], tile[where]);
-            set_subchunk_active(pos + offsets[2]);
-        //}
+        write_cell(pos + offsets[2], tile[where]);
 
         where = (moves >> 0) & 3;
-        //if(where != 3){
-            write_cell(pos + offsets[3], tile[where]);
-            set_subchunk_active(pos + offsets[3]);
-        //}
-            
-        //set_subchunk_active(pos);
+        write_cell(pos + offsets[3], tile[where]);
+
+        if(gl_LocalInvocationID.x == 0 && is_active){
+            subchunks[subchunk_id - 1] = RAND_VALUE;
+            subchunks[subchunk_id] = RAND_VALUE;
+            subchunks[subchunk_id + 1] = RAND_VALUE;
+
+            subchunks[subchunk_id + NUMBER_SUBCHUNKS_X - 1] = RAND_VALUE;
+            subchunks[subchunk_id + NUMBER_SUBCHUNKS_X] = RAND_VALUE;
+            subchunks[subchunk_id + NUMBER_SUBCHUNKS_X + 1] = RAND_VALUE;
+
+            subchunks[subchunk_id - NUMBER_SUBCHUNKS_X - 1] = RAND_VALUE;
+            subchunks[subchunk_id - NUMBER_SUBCHUNKS_X] = RAND_VALUE;
+            subchunks[subchunk_id - NUMBER_SUBCHUNKS_X + 1] = RAND_VALUE;
+
+            //set_subchunk_active(pos + offsets[0]);
+            //set_subchunk_active(pos + offsets[1]);
+            //set_subchunk_active(pos + offsets[2]);
+            //set_subchunk_active(pos + offsets[3]);
+        }
     })";
 }
 

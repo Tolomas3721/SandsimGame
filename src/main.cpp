@@ -322,7 +322,7 @@ int main() {
 
 
 
-    int count = 999;
+    int count = 0;
     auto begin = std::chrono::high_resolution_clock::now();
     auto end = std::chrono::high_resolution_clock::now();
     double fps = 60.0;
@@ -350,6 +350,7 @@ int main() {
             glfwSwapBuffers(window);
             glfwPollEvents();
             g = 0;
+            glFinish();
         }
         
 
@@ -397,12 +398,12 @@ int main() {
 
         glUniform1i(glGetUniformLocation(screenProgram, "scale"), scale);
         glUniform2i(glGetUniformLocation(screenProgram, "offset"), offsetX, offsetY);
-        const int MA_XCOUNT = 1000;
+        const int MA_XCOUNT = 1;
         if(count == MA_XCOUNT){
             end = std::chrono::high_resolution_clock::now();
             size_t duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count();
-            fps = (double)1 / (double(duration) / 1e9) * (double)MA_XCOUNT;
-            std::cout << "Frame time: " <<  double(duration) / 1e3 / (double)MA_XCOUNT << " us\n";
+            fps = (double)1 / (double(duration) / 1e9) * (double)count;
+            std::cout << "Frame time: " <<  double(duration) / 1e3 / (double)count << " us\n";
             
             std::cout << fps << " fps\n";
             count = 0;
