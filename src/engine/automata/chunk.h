@@ -20,9 +20,9 @@ public:
     static constexpr size_t CHUNK_SIZE_Y = 256;
     static_assert(std::has_single_bit(CHUNK_SIZE_Y), "CHUNK_SIZE_Y in Chunk class is not power of 2");
 
-    static constexpr size_t SUBCHUNK_SIZE_X = 64;
+    static constexpr size_t SUBCHUNK_SIZE_X = 128;
     static_assert(CHUNK_SIZE_X % SUBCHUNK_SIZE_X == 0 && SUBCHUNK_SIZE_X <= CHUNK_SIZE_X, "SUBCHUNK_X in Chunk class has an invalid value");
-    static constexpr size_t SUBCHUNK_SIZE_Y = 8;
+    static constexpr size_t SUBCHUNK_SIZE_Y = 2;
     static_assert(CHUNK_SIZE_Y % SUBCHUNK_SIZE_Y == 0 && SUBCHUNK_SIZE_Y <= CHUNK_SIZE_Y, "SUBCHUNK_Y in Chunk class has an invalid value");
 
     inline Cell& get_cell(size_t x, size_t y){

@@ -148,8 +148,8 @@ GLuint createScreenProgram(){
         void main() {
             ivec2 pixel = ivec2(gl_FragCoord.xy) / scale + offset.xy;
 
-            if(pixel.x < 0 || pixel.x >= width || pixel.y < 0 || pixel.y >= height){
-                discard;
+            if(pixel.x < 0 || pixel.x >= SIM_CHUNKS_X * CHUNK_SIZE || pixel.y < 0 || pixel.y >= SIM_CHUNKS_Y * CHUNK_SIZE){
+                //discard;
             }
 
             uvec4 pos = uvec4(
@@ -336,6 +336,7 @@ int main() {
         if(!paused || step_once){
             compute_shader.run();
         }
+        GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
         // --- Render pass ---
         //glClear(GL_COLOR_BUFFER_BIT);
         glUseProgram(screenProgram);
@@ -346,12 +347,15 @@ int main() {
         static int g = 0;
         g++;
         if(g == 1){
+            //glClear(GL_COLOR_CLEAR_VALUE);
             glDrawArrays(GL_TRIANGLES, 0, 3);
             glfwSwapBuffers(window);
             glfwPollEvents();
             g = 0;
-            glFinish();
+            //glFinish();
         }
+        glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, GL_TIMEOUT_IGNORED);
+        glDeleteSync(fence);
         
 
         const int speed = 4; // movement speed (in pixels, before scaling)

@@ -184,7 +184,7 @@ void PredictionMapMaker::MoveGroup::generate(TileState state){
             fill_portion(TOP_LEFT, BOTTOM_LEFT, TOP_RIGHT, BOTTOM_RIGHT, 2);
         }
         if(state.top_left == CellInfo::MainType::GAS && state.top_right == CellInfo::MainType::LIQUID){
-            fill_portion(TOP_RIGHT, TOP_LEFT, BOTTOM_LEFT, BOTTOM_RIGHT, 0);
+            fill_portion(TOP_RIGHT, TOP_LEFT, BOTTOM_LEFT, BOTTOM_RIGHT, 1);
         }
         //std::cout << "fall down right";
         return;

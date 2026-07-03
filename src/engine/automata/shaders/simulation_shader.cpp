@@ -54,7 +54,9 @@ void SimulationShader::run(){
 
     constexpr std::uint32_t reset[3] = {0, 1, 1};
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, update_counter);
-    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(reset), reset);
+    constexpr uint32_t zero = 0;
+    glClearBufferSubData(GL_SHADER_STORAGE_BUFFER, GL_R32UI, 0, sizeof(uint32_t), GL_RED_INTEGER, GL_UNSIGNED_INT, &zero);
+    //glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(reset), reset);
     glMemoryBarrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
     
     glUniform1ui(0, frame);
@@ -123,7 +125,7 @@ void SimulationShader::compile(const std::vector<CellType> &cell_types, const st
 
             
             if(is_active){
-                id = atomicAdd(buff_needed, 1);//, uint(is_active));
+                id = atomicAdd(buff_needed, 1);
             }
             barrier();
 
@@ -220,6 +222,12 @@ void SimulationShader::compile(const std::vector<CellType> &cell_types, const st
 
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
 
+    // also save the source code (for debugging)
+    std::ofstream file(filepath.string() + "_code.comp");
+    if(file.is_open()){
+        file.write(code.c_str(), code.size());
+        file.close();
+    }
     if(!success){
         std::cout << "failed to compile simulation\n";
         char log[1024];
@@ -232,12 +240,7 @@ void SimulationShader::compile(const std::vector<CellType> &cell_types, const st
         //std::cerr << "Compute shader error:\n" << log << std::endl;
     }
     
-    // also save the source code (for debugging)
-    std::ofstream file(filepath.string() + "_code.comp");
-    if(file.is_open()){
-        file.write(code.c_str(), code.size());
-        file.close();
-    }
+    
     
     glAttachShader(program, shader);
     glLinkProgram(program);
@@ -342,6 +345,7 @@ constexpr std::string SimulationShader::make_uniforms_and_buffers(){
     "layout(location = 0) uniform ivec2 CURRENT_STEP_OFFSET;\n"
     "layout(location = 1) uniform uint RAND_VALUE;\n"
 
+    // buffers
     "struct Chunk {\n"
     "   uint cells[CHUNK_SIZE_X * CHUNK_SIZE_Y];\n"
     "};\n"
@@ -475,13 +479,20 @@ constexpr std::string SimulationShader::make_main_code(){
         state ^= (state << 13);
         state ^= (state >> 17);
         state ^= (state << 5);
-        return state & 3;
+        state = state & (7 << 1);
+        // 3 = 50%
+        // 2 = 25%
+        // 1 = 12.5%
+        // 0 = 12.5%
+        // 0b1111111110100100
+        state = (0xFFA8 >> state) & 3;
+        return state << 3;
     }
 
-    shared bool is_active;
+    shared bool is_inactive;
 
     void main() {
-        if(gl_LocalInvocationID.x == 0) is_active = false;
+        if(gl_LocalInvocationID.x == 0) is_inactive = true;
         const uint TILES_PER_SUBCHUNK_X = SUBCHUNK_SIZE_X / 2;
         uint subchunk_id = active_subchunks[gl_WorkGroupID.x];
         uint subchunk_y = subchunk_id / NUMBER_SUBCHUNKS_X;
@@ -507,7 +518,7 @@ constexpr std::string SimulationShader::make_main_code(){
         uint tile[4] = uint[](
             get_cell(pos + offsets[0]),
             get_cell(pos + offsets[1]),
-            get_cell(pos + offsets[2]), // useless, since 0
+            get_cell(pos),// + offsets[2]), // useless, since 0
             get_cell(pos + offsets[3])
         );
 
@@ -520,28 +531,32 @@ constexpr std::string SimulationShader::make_main_code(){
         const uint NO_MOVE = (0 << 6) | (1 << 4) | (2 << 2) | 3;
         const uint TRUE_NO_MOVE = (NO_MOVE | (NO_MOVE << 8) | (NO_MOVE << 16) | (NO_MOVE << 24));
 
+        barrier();
         if(moves != TRUE_NO_MOVE){
-            is_active = true;
-        } else if(gl_LocalInvocationID.x != 0){
+            is_inactive = false;
+        }
+        barrier();
+        if(is_inactive){// || (moves == TRUE_NO_MOVE && gl_LocalInvocationID.x != 0)){
             return;
         }
 
-        uint random_shift = 8 * rand();
-        moves = (moves >> random_shift) & 0xFF;
+        moves = (moves >> rand()) & 0xFF;
 
-        uint where = (moves >> 6) & 3;
-        write_cell(pos + offsets[0], tile[where]);
+        if(moves != NO_MOVE){
+            uint where = (moves >> 6) & 3;
+            write_cell(pos + offsets[0], tile[where]);
 
-        where = (moves >> 4) & 3;
-        write_cell(pos + offsets[1], tile[where]);
+            where = (moves >> 4) & 3;
+            write_cell(pos + offsets[1], tile[where]);
 
-        where = (moves >> 2) & 3;
-        write_cell(pos + offsets[2], tile[where]);
+            where = (moves >> 2) & 3;
+            write_cell(pos/* + offsets[2]*/, tile[where]);
 
-        where = (moves >> 0) & 3;
-        write_cell(pos + offsets[3], tile[where]);
+            where = (moves >> 0) & 3;
+            write_cell(pos + offsets[3], tile[where]);
+        }
 
-        if(gl_LocalInvocationID.x == 0 && is_active){
+        if(gl_LocalInvocationID.x == 0){
             subchunks[subchunk_id - 1] = RAND_VALUE;
             subchunks[subchunk_id] = RAND_VALUE;
             subchunks[subchunk_id + 1] = RAND_VALUE;
