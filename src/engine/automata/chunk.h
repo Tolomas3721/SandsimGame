@@ -43,6 +43,6 @@ public:
 
 private:
     // use X as the minor for better cache access
-    // but its all 2x2 anyway,unless maybe liquids will move sideways more
+    // but its all 2x2 anyway, unless maybe liquids will move sideways more
     std::array<std::array<Cell, CHUNK_SIZE_X>, CHUNK_SIZE_Y> cells;
 };

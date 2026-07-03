@@ -149,7 +149,7 @@ GLuint createScreenProgram(){
             ivec2 pixel = ivec2(gl_FragCoord.xy) / scale + offset.xy;
 
             if(pixel.x < 0 || pixel.x >= SIM_CHUNKS_X * CHUNK_SIZE || pixel.y < 0 || pixel.y >= SIM_CHUNKS_Y * CHUNK_SIZE){
-                //discard;
+                discard;
             }
 
             uvec4 pos = uvec4(
@@ -286,10 +286,10 @@ int main() {
                     if(y == 0 && x > 10){
                         type = 3;
                     }
-                    int color = type;
-                    if(chunk_x == 2 && chunk_y == 1){
-                        //color = 4;
+                    if(x == 0 && y > 10){
+                        type = 3;
                     }
+                    int color = type;
                     v = Cell(CellInfo::MainType(type), CellInfo::SubType(subtype), color);
                 }
             }

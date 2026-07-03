@@ -69,7 +69,7 @@ private:
         std::string to_text();
 
         void generate(TileState state);
-        bool find_error();
+        bool find_error(TileState state);
 
     private:
         std::uint32_t moves = 0;

@@ -15,6 +15,10 @@ std::array<std::uint32_t, 4 * 4 * 4 * 4> PredictionMapMaker::generate(){
         TileState state = i;
 
         moves.generate(state);
+        
+        if(moves.find_error(state)){
+            _sleep(500);
+        }
 
         predictions[i] = moves.get();
     }
@@ -158,7 +162,7 @@ void PredictionMapMaker::MoveGroup::generate(TileState state){
         fill(BOTTOM_LEFT, BOTTOM_RIGHT, TOP_LEFT, TOP_RIGHT);
         fill_portion(BOTTOM_LEFT, TOP_RIGHT, TOP_LEFT, BOTTOM_RIGHT, 2);
         fill_portion(TOP_LEFT, BOTTOM_RIGHT, BOTTOM_LEFT, TOP_RIGHT, 1);
-        //std::cout << "all fall";
+        //std::cout << "all fall\n";
         return;
     }
     
@@ -172,7 +176,7 @@ void PredictionMapMaker::MoveGroup::generate(TileState state){
         if(state.top_left == CellInfo::MainType::LIQUID && state.top_right == CellInfo::MainType::GAS){
             fill_portion(TOP_RIGHT, TOP_LEFT, BOTTOM_LEFT, BOTTOM_RIGHT, 0);
         }
-        //std::cout << "fall down left";
+        //std::cout << "fall down left\n";
         return;
     }
     
@@ -186,7 +190,7 @@ void PredictionMapMaker::MoveGroup::generate(TileState state){
         if(state.top_left == CellInfo::MainType::GAS && state.top_right == CellInfo::MainType::LIQUID){
             fill_portion(TOP_RIGHT, TOP_LEFT, BOTTOM_LEFT, BOTTOM_RIGHT, 1);
         }
-        //std::cout << "fall down right";
+        //std::cout << "fall down right\n";
         return;
     }
     
@@ -200,7 +204,7 @@ void PredictionMapMaker::MoveGroup::generate(TileState state){
             fill_portion(TOP_RIGHT, TOP_LEFT, BOTTOM_RIGHT, BOTTOM_LEFT, 4);
             fill_portion(TOP_LEFT, TOP_RIGHT, BOTTOM_RIGHT, BOTTOM_LEFT, 1);
         }
-        //std::cout << "\\";
+        //std::cout << "\\\n";
         return;
     }
     
@@ -215,7 +219,7 @@ void PredictionMapMaker::MoveGroup::generate(TileState state){
             fill_portion(TOP_RIGHT, TOP_LEFT, BOTTOM_RIGHT, BOTTOM_LEFT, 4);
             fill_portion(TOP_LEFT, TOP_RIGHT, BOTTOM_RIGHT, BOTTOM_LEFT, 1);
         }
-        //std::cout << "//";
+        //std::cout << "//\n";
         return;
     }
     
@@ -226,16 +230,18 @@ void PredictionMapMaker::MoveGroup::generate(TileState state){
         fill(TOP_RIGHT, TOP_LEFT, BOTTOM_LEFT, BOTTOM_RIGHT);
         // fill 1/4 with no_move
         fill_portion(TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, 1);
-        //std::cout << "glide";
+        //std::cout << "glide\n";
         return;
     }
 
     if(!state.is_top(CellInfo::MainType::LIQUID) && 
-    (state.bottom_left == CellInfo::MainType::LIQUID || state.bottom_right == CellInfo::MainType::LIQUID)){
+    ((state.bottom_left == CellInfo::MainType::LIQUID && state.bottom_right != CellInfo::MainType::SOLID) || 
+    (state.bottom_right == CellInfo::MainType::LIQUID  && state.bottom_left != CellInfo::MainType::SOLID))){
         // bottom glide
         fill(TOP_LEFT, TOP_RIGHT, BOTTOM_RIGHT, BOTTOM_LEFT);
         // fill 1/4 with no_move
         fill_portion(TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, 1);
+        //std::cout << "bottom glide\n";
         return;
     }
 
@@ -244,7 +250,8 @@ void PredictionMapMaker::MoveGroup::generate(TileState state){
         fill(TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT);
         // fill 1/4 with up move
         // actually, this is useless without more stuff lol
-        fill_portion(TOP_LEFT, BOTTOM_LEFT, TOP_RIGHT, BOTTOM_RIGHT, 0);
+        fill_portion(BOTTOM_LEFT, BOTTOM_RIGHT, TOP_LEFT, TOP_RIGHT, 1);
+        //std::cout << "liquid jump\n";
         return;
     }
     
@@ -254,9 +261,10 @@ void PredictionMapMaker::MoveGroup::generate(TileState state){
     //std::cout << "assigning: NO_MOVE\n";
     //std::cout << "no move: " << state.to_string() << '\n';
     fill(TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT);
+    //std::cout << "no move\n";
 }
 
-bool PredictionMapMaker::MoveGroup::find_error(){
+bool PredictionMapMaker::MoveGroup::find_error(TileState state){
     for(std::uint32_t i = 0; i < 4; i++){
         std::uint32_t counts[4] = {0};
 
@@ -267,9 +275,36 @@ bool PredictionMapMaker::MoveGroup::find_error(){
 
         for(std::uint32_t j = 0; j < 4; j++){
             if(counts[j] != 1){
-                std::cout << "\nERRORROROROROROROROR\n";
+                std::cout << "ERRORROROROROROROROR\n" << 
+                            state.top_left << ' ' << state.top_right << 
+                            state.bottom_left << ' ' << state.bottom_right << '\n';
                 return true;
             }
+        }
+
+        if(state.top_left == CellInfo::MainType::SOLID && ((moves >> (8 * i + 6)) & 3) != TOP_LEFT){
+            std::cout << "ERROR: " << "top left moves!!!!\nstate: " 
+            << std::bitset<32>(state.pack()).to_string() << '\n'
+            << std::bitset<32>(moves).to_string() << '\n';
+            return true;
+        }
+        if(state.top_right == CellInfo::MainType::SOLID && ((moves >> (8 * i + 4)) & 3) != TOP_RIGHT){
+            std::cout << "ERROR: " << "top right moves!!!!\nstate: " 
+            << std::bitset<32>(state.pack()).to_string() << '\n'
+            << std::bitset<32>(moves).to_string() << '\n';
+            return true;
+        }
+        if(state.bottom_left == CellInfo::MainType::SOLID && ((moves >> (8 * i + 2)) & 3) != BOTTOM_LEFT){
+            std::cout << "ERROR: " << "bottom left moves!!!!\nstate: " 
+            << std::bitset<32>(state.pack()).to_string() << '\n'
+            << std::bitset<32>(moves).to_string() << '\n';
+            return true;
+        }
+        if(state.bottom_right == CellInfo::MainType::SOLID && ((moves >> (8 * i + 0)) & 3) != BOTTOM_RIGHT){
+            std::cout << "ERROR: " << "bottom right moves!!!!\nstate: " 
+            << std::bitset<32>(state.pack()).to_string() << '\n'
+            << std::bitset<32>(moves).to_string() << '\n';
+            return true;
         }
     }
     return false;
