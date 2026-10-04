@@ -214,7 +214,7 @@ int main() {
     GLFWwindow* window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Compute", nullptr, nullptr);
     
     glfwMakeContextCurrent(window);
-    //glfwSwapInterval(0); // disable vsync
+    glfwSwapInterval(0); // disable vsync
     gladLoadGL();
 
     
