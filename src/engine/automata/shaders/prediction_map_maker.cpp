@@ -162,7 +162,7 @@ void PredictionMapMaker::MoveGroup::generate(TileState state){
         fill(BOTTOM_LEFT, BOTTOM_RIGHT, TOP_LEFT, TOP_RIGHT);
         fill_portion(BOTTOM_LEFT, TOP_RIGHT, TOP_LEFT, BOTTOM_RIGHT, 2);
         fill_portion(TOP_LEFT, BOTTOM_RIGHT, BOTTOM_LEFT, TOP_RIGHT, 1);
-        //std::cout << "all fall\n";
+        std::cout << "all fall\n";
         return;
     }
     
@@ -250,6 +250,8 @@ void PredictionMapMaker::MoveGroup::generate(TileState state){
         fill(TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT);
         // fill 1/4 with up move
         // actually, this is useless without more stuff lol
+        fill_portion(BOTTOM_LEFT, TOP_RIGHT, TOP_LEFT, BOTTOM_RIGHT, 3);
+        fill_portion(TOP_LEFT, BOTTOM_RIGHT, BOTTOM_LEFT, TOP_RIGHT, 2);
         fill_portion(BOTTOM_LEFT, BOTTOM_RIGHT, TOP_LEFT, TOP_RIGHT, 1);
         //std::cout << "liquid jump\n";
         return;

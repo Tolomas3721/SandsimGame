@@ -27,8 +27,6 @@ void SimulationShader::run(){
 
     constexpr std::array<std::pair<int, int>, 4> offsets = {{
         {1, -1}, {0, 0}, {-1, 1}, {0, 0}
-        //{2, 1}, {-1, 0}, {-1, -1}, {0, -2}
-        //{0, 0}, {1, -1}
     }};
     
     const GLuint rand_value_loc = 1;
@@ -42,8 +40,10 @@ void SimulationShader::run(){
         const GLuint offset_loc = 0;
         glUniform2i(offset_loc, offsets[i].first, offsets[i].second);
         glDispatchComputeIndirect(0);
-        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);// | GL_BUFFER_UPDATE_BARRIER_BIT);
+        glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
     }
+
+    
 
     //glFinish();
     auto start2 = std::chrono::high_resolution_clock::now();
@@ -485,6 +485,10 @@ constexpr std::string SimulationShader::make_main_code(){
         // 1 = 12.5%
         // 0 = 12.5%
         // 0b1111111110100100
+        //for(int i = 0; i < 15; i++){
+        //    state += uint(19 * (acos(float(state) / float(0xFFFFFFFF)) + 1));
+        //    state -= uint(17 * (asin(float(state) / float(0xFFFFFFF3)) + 2));
+        //}
         state = (0xFFA8 >> state) & 3;
         return state << 3;
     }

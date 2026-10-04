@@ -286,7 +286,7 @@ int main() {
                     if(y == 0 && x > 10){
                         type = 3;
                     }
-                    if(x == 0 && y > 10){
+                    if(x == 0 && (y > 200 || y < 10)){
                         type = 3;
                     }
                     int color = type;
@@ -322,7 +322,7 @@ int main() {
 
 
 
-    int count = 0;
+    int count = 99;
     auto begin = std::chrono::high_resolution_clock::now();
     auto end = std::chrono::high_resolution_clock::now();
     double fps = 60.0;
@@ -347,12 +347,12 @@ int main() {
         static int g = 0;
         g++;
         if(g == 1){
-            //glClear(GL_COLOR_CLEAR_VALUE);
+            glClear(GL_COLOR_CLEAR_VALUE);
             glDrawArrays(GL_TRIANGLES, 0, 3);
             glfwSwapBuffers(window);
             glfwPollEvents();
             g = 0;
-            //glFinish();
+            glFinish();
         }
         glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, GL_TIMEOUT_IGNORED);
         glDeleteSync(fence);
@@ -402,7 +402,7 @@ int main() {
 
         glUniform1i(glGetUniformLocation(screenProgram, "scale"), scale);
         glUniform2i(glGetUniformLocation(screenProgram, "offset"), offsetX, offsetY);
-        const int MA_XCOUNT = 1;
+        const int MA_XCOUNT = 100;
         if(count == MA_XCOUNT){
             end = std::chrono::high_resolution_clock::now();
             size_t duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count();
